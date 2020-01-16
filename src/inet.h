@@ -40,6 +40,9 @@ const char *inet_tryconnect(p_socket ps, int *family, const char *address, const
 const char *inet_tryaccept(p_socket server, int family, p_socket client, p_timeout tm);
 const char *inet_trybind(p_socket ps, int *family, const char *address, const char *serv, struct addrinfo *bindhints);
 
+int inet_getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res);
+void inet_freeaddrinfo(struct addrinfo *res);
+
 #ifdef LUASOCKET_INET_ATON
 int inet_aton(const char *cp, struct in_addr *inp);
 #endif

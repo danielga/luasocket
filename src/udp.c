@@ -188,7 +188,7 @@ static int meth_sendto(lua_State *L) {
 #ifdef AI_NUMERICSERV
     aihint.ai_flags |= AI_NUMERICSERV;
 #endif
-    err = getaddrinfo(ip, port, &aihint, &ai);
+    err = inet_getaddrinfo(ip, port, &aihint, &ai);
 	if (err) {
         lua_pushnil(L);
         lua_pushstring(L, gai_strerror(err));
@@ -210,7 +210,7 @@ static int meth_sendto(lua_State *L) {
         if (errstr != NULL) {
             lua_pushnil(L);
             lua_pushstring(L, errstr);
-            freeaddrinfo(ai);
+            inet_freeaddrinfo(ai);
             return 2;
         }
     }
@@ -218,7 +218,7 @@ static int meth_sendto(lua_State *L) {
     timeout_markstart(tm);
     err = socket_sendto(&udp->sock, data, count, &sent, ai->ai_addr,
         (socklen_t) ai->ai_addrlen, tm);
-    freeaddrinfo(ai);
+    inet_freeaddrinfo(ai);
     if (err != IO_DONE) {
         lua_pushnil(L);
         lua_pushstring(L, udp_strerror(err));

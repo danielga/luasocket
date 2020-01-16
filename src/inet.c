@@ -4,6 +4,7 @@
 \*=========================================================================*/
 #include "luasocket.h"
 #include "inet.h"
+#include "filter.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,6 +51,8 @@ int inet_open(lua_State *L)
 \*-------------------------------------------------------------------------*/
 static int inet_gethost(const char *address, struct hostent **hp) {
     struct in_addr addr;
+    if (!filter_isacceptablehost(address, NULL))
+        return HOST_NOT_FOUND;
     if (inet_aton(address, &addr))
         return socket_gethostbyaddr((char *) &addr, sizeof(addr), hp);
     else
@@ -90,7 +93,7 @@ static int inet_global_getnameinfo(lua_State *L) {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_family = AF_UNSPEC;
 
-    ret = getaddrinfo(host, serv, &hints, &resolved);
+    ret = inet_getaddrinfo(host, serv, &hints, &resolved);
     if (ret != 0) {
         lua_pushnil(L);
         lua_pushstring(L, socket_gaistrerror(ret));
@@ -108,7 +111,7 @@ static int inet_global_getnameinfo(lua_State *L) {
             lua_settable(L, -3);
         }
     }
-    freeaddrinfo(resolved);
+    inet_freeaddrinfo(resolved);
 
     if (serv) {
         lua_pushstring(L, sbuf);
@@ -162,7 +165,7 @@ static int inet_global_getaddrinfo(lua_State *L)
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_family = AF_UNSPEC;
-    ret = getaddrinfo(hostname, NULL, &hints, &resolved);
+    ret = inet_getaddrinfo(hostname, NULL, &hints, &resolved);
     if (ret != 0) {
         lua_pushnil(L);
         lua_pushstring(L, socket_gaistrerror(ret));
@@ -174,7 +177,7 @@ static int inet_global_getaddrinfo(lua_State *L)
         ret = getnameinfo(iterator->ai_addr, (socklen_t) iterator->ai_addrlen,
             hbuf, (socklen_t) sizeof(hbuf), NULL, 0, NI_NUMERICHOST);
         if (ret){
-          freeaddrinfo(resolved);
+          inet_freeaddrinfo(resolved);
           lua_pushnil(L);
           lua_pushstring(L, socket_gaistrerror(ret));
           return 2;
@@ -209,7 +212,7 @@ static int inet_global_getaddrinfo(lua_State *L)
         lua_settable(L, -3);
         i++;
     }
-    freeaddrinfo(resolved);
+    inet_freeaddrinfo(resolved);
     return 1;
 }
 
@@ -392,10 +395,10 @@ const char *inet_tryconnect(p_socket ps, int *family, const char *address,
     const char *err = NULL;
     int current_family = *family;
     /* try resolving */
-    err = socket_gaistrerror(getaddrinfo(address, serv,
+    err = socket_gaistrerror(inet_getaddrinfo(address, serv,
                 connecthints, &resolved));
     if (err != NULL) {
-        if (resolved) freeaddrinfo(resolved);
+        if (resolved) inet_freeaddrinfo(resolved);
         return err;
     }
     for (iterator = resolved; iterator; iterator = iterator->ai_next) {
@@ -423,7 +426,7 @@ const char *inet_tryconnect(p_socket ps, int *family, const char *address,
             break;
         }
     }
-    freeaddrinfo(resolved);
+    inet_freeaddrinfo(resolved);
     /* here, if err is set, we failed */
     return err;
 }
@@ -456,9 +459,9 @@ const char *inet_trybind(p_socket ps, int *family, const char *address,
     if (strcmp(address, "*") == 0) address = NULL;
     if (!serv) serv = "0";
     /* try resolving */
-    err = socket_gaistrerror(getaddrinfo(address, serv, bindhints, &resolved));
+    err = socket_gaistrerror(inet_getaddrinfo(address, serv, bindhints, &resolved));
     if (err) {
-        if (resolved) freeaddrinfo(resolved);
+        if (resolved) inet_freeaddrinfo(resolved);
         return err;
     }
     /* iterate over resolved addresses until one is good */
@@ -482,9 +485,18 @@ const char *inet_trybind(p_socket ps, int *family, const char *address,
         }
     }
     /* cleanup and return error */
-    freeaddrinfo(resolved);
+    inet_freeaddrinfo(resolved);
     /* here, if err is set, we failed */
     return err;
+}
+
+int inet_getaddrinfo(const char *node, const char *service,
+        const struct addrinfo *hints, struct addrinfo **res) {
+    return filter_isacceptablehost(node, service) ? getaddrinfo(node, service, hints, res) : EAI_FAIL;
+}
+
+void inet_freeaddrinfo(struct addrinfo *res) {
+    freeaddrinfo(res);
 }
 
 /*-------------------------------------------------------------------------*\
